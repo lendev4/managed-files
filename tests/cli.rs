@@ -594,3 +594,111 @@ fn target_paths_must_name_files_and_source_symlinks_are_supported() {
         "contents"
     );
 }
+
+#[test]
+fn per_file_backups_override_or_disable_global_default() {
+    for global in [json!(null), json!(".global")] {
+        let dir = tempdir().unwrap();
+        for name in ["inherit", "opt-in", "opt-out", "seed"] {
+            fs::write(dir.path().join(name), "old").unwrap();
+        }
+        fs::write(dir.path().join("opt-out.global"), "keep old backup").unwrap();
+        let files = json!([
+            {"target":"inherit","mode":"replace","text":"new"},
+            {"target":"opt-in","mode":"replace","text":"new","backup_extension":".local"},
+            {"target":"opt-out","mode":"replace","text":"new","backup_extension":null},
+            {"target":"seed","mode":"seed","text":"new","backup_extension":".local"}
+        ]);
+        fs::write(
+            dir.path().join("manifest.json"),
+            json!({
+                "version": 1, "backup_extension": global, "files": files
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let preview = Command::new(env!("CARGO_BIN_EXE_managed-files"))
+            .current_dir(dir.path())
+            .args(["apply", "manifest.json", "--dry-run"])
+            .output()
+            .unwrap();
+        let report = String::from_utf8_lossy(&preview.stdout);
+        assert!(report.contains("would replace opt-in (backup: opt-in.local)\n"));
+        assert!(report.contains("would replace opt-out\n"));
+        assert!(!dir.path().join("opt-in.local").exists());
+        assert_eq!(
+            fs::read_to_string(dir.path().join("opt-out")).unwrap(),
+            "old"
+        );
+        success(preview);
+        success(apply(&dir, files, global.clone()));
+        assert_eq!(
+            dir.path().join("inherit.global").exists(),
+            global.is_string()
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("opt-in.local")).unwrap(),
+            "old"
+        );
+        assert!(!dir.path().join("opt-in.global").exists());
+        assert_eq!(
+            fs::read_to_string(dir.path().join("opt-out.global")).unwrap(),
+            "keep old backup"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("opt-out")).unwrap(),
+            "new"
+        );
+        assert!(!dir.path().join("seed.local").exists());
+    }
+}
+
+#[test]
+fn per_file_backup_validation_and_collisions_are_checked_before_writes() {
+    for suffix in [
+        json!(""),
+        json!("/bad"),
+        json!("\\bad"),
+        json!("\0"),
+        json!(true),
+    ] {
+        let dir = tempdir().unwrap();
+        failure(
+            apply(
+                &dir,
+                json!([
+                    {"target":"first","mode":"replace","text":"x"},
+                    {"target":"second","mode":"replace","text":"y","backup_extension":suffix}
+                ]),
+                json!(null),
+            ),
+            if suffix.is_boolean() {
+                "parse manifest"
+            } else {
+                "backup_extension"
+            },
+        );
+        assert!(!dir.path().join("first").exists());
+    }
+    let dir = tempdir().unwrap();
+    failure(
+        apply(
+            &dir,
+            json!([
+                {"target":"config","mode":"replace","text":"x","backup_extension":".local"},
+                {"target":"config.local","mode":"replace","text":"y"}
+            ]),
+            json!(null),
+        ),
+        "conflicting destinations",
+    );
+    // Disabling backups also disables reservation of the inherited backup path.
+    success(apply(
+        &dir,
+        json!([
+            {"target":"config","mode":"replace","text":"x","backup_extension":null},
+            {"target":"config.global","mode":"replace","text":"y","backup_extension":null}
+        ]),
+        json!(".global"),
+    ));
+}

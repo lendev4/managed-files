@@ -36,6 +36,7 @@ let
     "readonly" = {
       mode = "replace-readonly";
       text = "fixed";
+      backupExtension = null;
     };
     "settings.json" = {
       json = {
@@ -53,6 +54,7 @@ let
   };
   enabled = evaluate {
     inherit files;
+    backupExtension = ".mfbak";
   };
   disabled = evaluate {
     enable = false;
@@ -79,9 +81,12 @@ let
       {
         defaults.precedence = "declared";
         files = {
-          "declared.json".json = {
-            size = 12;
-            added = true;
+          "declared.json" = {
+            backupExtension = ".local-backup";
+            json = {
+              size = 12;
+              added = true;
+            };
           };
           "existing.json" = {
             precedence = "existing";
@@ -104,6 +109,7 @@ let
             size = 12;
             added = true;
           };
+          "nested/settings.toml".backupExtension = ".toml-backup";
           "disabled.toml" = {
             enable = false;
           };
@@ -157,6 +163,18 @@ assert rejects { xdgConfigFiles.bad.source = ./source.txt; };
 assert rejects {
   files.".config/duplicate.json".json = { };
   xdgConfigFiles."duplicate.json".json = { };
+};
+assert rejects {
+  files.bad = {
+    json = { };
+    backupExtension = "";
+  };
+};
+assert rejects {
+  xdgConfigFiles.bad = {
+    toml = { };
+    backupExtension = "/bad";
+  };
 };
 assert lib.elem package enabled.config.home.packages;
 assert lib.elem "writeBoundary" activation.after;

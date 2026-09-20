@@ -73,6 +73,13 @@ let
           defaultText = lib.literalExpression "config.managedFiles.defaults.precedence";
           description = "Which side wins when merge encounters conflicting values. Existing-only keys survive either choice.";
         };
+
+        backupExtension = mkOption {
+          type = types.nullOr types.str;
+          default = cfg.backupExtension;
+          defaultText = lib.literalExpression "config.managedFiles.backupExtension";
+          description = "Backup suffix for this file, overriding the global default. Set null to disable backups. Seed mode never creates backups.";
+        };
       };
     }
   );
@@ -121,6 +128,10 @@ let
         assertion = file.mode != "merge" || file.json != null || file.toml != null;
         message = "${option}: merge mode only supports json or toml content.";
       }
+      {
+        assertion = validBackupExtension file.backupExtension;
+        message = "${option}.backupExtension must be null or a nonempty filename suffix without separators.";
+      }
     ]
   ) entries;
 
@@ -147,6 +158,7 @@ let
     {
       inherit target;
       inherit (file) mode precedence;
+      backup_extension = file.backupExtension;
     }
     // content;
 
@@ -157,6 +169,11 @@ let
       files = map mkManifestFile entries;
     }
   );
+
+  validBackupExtension =
+    extension:
+    extension == null
+    || (extension != "" && !(lib.hasInfix "/" extension) && !(lib.hasInfix "\\" extension));
 in
 {
   options.managedFiles = {
@@ -174,8 +191,8 @@ in
 
     backupExtension = mkOption {
       type = types.nullOr types.str;
-      default = ".mfbak";
-      description = "Extension used for backup files. Set to null to disable backups.";
+      default = null;
+      description = "Default backup suffix for all files. Backups are disabled by default. Each file may override this setting.";
     };
 
     package = mkOption {
@@ -200,13 +217,7 @@ in
   config = mkIf cfg.enable {
     assertions = fileAssertions ++ [
       {
-        assertion =
-          cfg.backupExtension == null
-          || (
-            cfg.backupExtension != ""
-            && !(lib.hasInfix "/" cfg.backupExtension)
-            && !(lib.hasInfix "\\" cfg.backupExtension)
-          );
+        assertion = validBackupExtension cfg.backupExtension;
         message = "managedFiles.backupExtension must be null or a nonempty filename suffix without separators.";
       }
       {

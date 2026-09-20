@@ -46,7 +46,6 @@ Declare the files to manage:
 ```nix
 {
   managedFiles = {
-    backupExtension = ".mfbak"; # default; null disables backups
     xdgConfigFiles = {
       "my-app/notes.txt" = {
         mode = "seed";
@@ -57,6 +56,7 @@ Declare the files to manage:
       };
       "my-app/settings.toml" = {
         precedence = "declared";
+        backupExtension = ".mfbak"; # opt in for this file only
         toml = { editor.autosave = true; };
       };
       "my-app/template.txt" = {
@@ -93,6 +93,20 @@ must specify exactly one of `source`, `text`, `json`, or `toml`.
 For example, disable an inherited declaration with
 `managedFiles.xdgConfigFiles."my-app/settings.json".enable = false;`.
 Declaring the same target through both collections is an error.
+
+Backups are disabled by default. Opt in per file with `backupExtension`:
+
+```nix
+managedFiles.xdgConfigFiles."my-app/settings.toml" = {
+  backupExtension = ".mfbak";
+  toml.editor.autosave = true;
+};
+```
+
+To enable backups globally, set `managedFiles.backupExtension = ".mfbak";`.
+Individual files can choose another suffix or set `backupExtension = null;`
+to disable backups. This works for both `files` and `xdgConfigFiles`.
+Existing backups are not deleted when backups are disabled.
 
 Paths cannot contain empty, `.` or `..` components. Activation runs after Home
 Manager's write boundary. Home Manager dry runs execute the CLI preview, so you
@@ -143,10 +157,9 @@ installing it; use `nix run . -- apply manifest.json` from this repository):
 ```json
 {
   "version": 1,
-  "backup_extension": ".mfbak",
   "files": [
     { "target": "config/notes.txt", "mode": "seed", "text": "Edit me!\n" },
-    { "target": "config/settings.json", "mode": "merge", "json": { "theme": "dark" } },
+    { "target": "config/settings.json", "mode": "merge", "backup_extension": ".mfbak", "json": { "theme": "dark" } },
     { "target": "config/template.txt", "mode": "replace", "text": "Template\n" },
     { "target": "config/policy.txt", "mode": "replace-readonly", "text": "Managed\n" }
   ]
@@ -156,7 +169,10 @@ installing it; use `nix run . -- apply manifest.json` from this repository):
 The defaults above are Home Manager conveniences: CLI manifest entries still
 require `mode`, and omitted `precedence` means `"existing"`.
 CLI paths are relative to the current working directory or absolute. Backups
-are disabled if `backup_extension` is absent or null. When enabled, merge and
+are disabled by default. A top-level `backup_extension` sets the default for
+all files. Each file can override it with its own `backup_extension`: omit the
+field to inherit, use a suffix string to enable, or `null` to disable.
+When enabled, merge and
 replace modes copy the previous contents to `<target><extension>` before
 writing, overwriting an existing **regular-file** backup. Seed never creates a
 backup. The extension must be nonempty and contain no path separators.
@@ -167,7 +183,7 @@ Preview the same plan without writing files, backups, or directories:
 $ managed-files apply manifest.json --dry-run
 would create config/notes.txt
 would merge config/settings.json (backup: config/settings.json.mfbak)
-would replace config/template.txt (backup: config/template.txt.mfbak)
+would replace config/template.txt
 would create config/policy.txt
 ```
 

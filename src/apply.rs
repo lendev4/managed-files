@@ -280,9 +280,8 @@ impl Plan {
                     Action::Replaced
                 };
                 let reserved_backup = if !matches!(file.mode, Mode::Seed) {
-                    manifest
-                        .backup_extension
-                        .as_ref()
+                    file.backup_extension
+                        .resolve(manifest.backup_extension.as_deref())
                         .map(|extension| {
                             let mut name = file
                                 .target

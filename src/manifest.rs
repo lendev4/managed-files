@@ -19,13 +19,12 @@ impl Manifest {
             "unsupported manifest version {}",
             self.version
         );
-        if let Some(extension) = &self.backup_extension {
-            ensure!(
-                !extension.is_empty() && !extension.contains(['/', '\\', '\0']),
-                "backup_extension must be a nonempty filename suffix without separators or NUL"
-            );
-        }
+        validate_backup_extension(self.backup_extension.as_deref())?;
         for file in &self.files {
+            validate_backup_extension(
+                file.backup_extension
+                    .resolve(self.backup_extension.as_deref()),
+            )?;
             if matches!(file.mode, Mode::Merge) {
                 ensure!(
                     matches!(file.content, Content::Json { .. } | Content::Toml { .. }),
@@ -58,7 +57,40 @@ pub struct ManagedFile {
     pub target: PathBuf,
     pub mode: Mode,
     pub precedence: Precedence,
+    pub backup_extension: BackupExtension,
     pub content: Content,
+}
+
+#[derive(Debug, Default)]
+pub enum BackupExtension {
+    #[default]
+    Inherit,
+    Override(Option<String>),
+}
+
+impl BackupExtension {
+    pub fn resolve<'a>(&'a self, global: Option<&'a str>) -> Option<&'a str> {
+        match self {
+            Self::Inherit => global,
+            Self::Override(extension) => extension.as_deref(),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for BackupExtension {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Option::<String>::deserialize(deserializer).map(Self::Override)
+    }
+}
+
+fn validate_backup_extension(extension: Option<&str>) -> Result<()> {
+    if let Some(extension) = extension {
+        ensure!(
+            !extension.is_empty() && !extension.contains(['/', '\\', '\0']),
+            "backup_extension must be a nonempty filename suffix without separators or NUL"
+        );
+    }
+    Ok(())
 }
 
 // Preserve field presence even for JSON null, and let serde reject duplicate
@@ -74,6 +106,8 @@ struct RawFile {
     mode: Mode,
     #[serde(default)]
     precedence: Precedence,
+    #[serde(default)]
+    backup_extension: BackupExtension,
     #[serde(default, deserialize_with = "present")]
     source: Option<Value>,
     #[serde(default, deserialize_with = "present")]
@@ -116,6 +150,7 @@ impl TryFrom<RawFile> for ManagedFile {
             target: raw.target,
             mode: raw.mode,
             precedence: raw.precedence,
+            backup_extension: raw.backup_extension,
             content,
         })
     }
