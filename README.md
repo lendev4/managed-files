@@ -1,5 +1,16 @@
 # managed-files
 
+**Table of contents**
+
+- [Merge precedence](#merge-precedence)
+- [Home Manager](#home-manager)
+  - [Declare files](#declare-files)
+  - [Example: Starship with Noctalia theme colors](#example-starship-with-noctalia-theme-colors)
+- [CLI](#cli)
+- [Filesystem behavior](#filesystem-behavior)
+- [Development](#development)
+- [License](#license)
+
 Manage mutable configuration files from Home Manager or a JSON manifest.
 Files are written atomically as regular files, with parent directories created
 as needed.
