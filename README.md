@@ -11,14 +11,66 @@ as needed.
 | `replace` | Write the declared content every time, leaving the file writable by its owner. |
 | `replace-readonly` | Write the declared content every time, then remove write permissions. |
 
-Merges default to `precedence = "existing"`; use `"declared"` to enforce declared
-values on conflicts. Existing-only keys survive either choice. Arrays are
-replaced as whole values. JSON is pretty-printed; TOML merges standard and
+JSON is pretty-printed; TOML merges standard and
 inline tables recursively, preserves comments on untouched content, and appends
 new table sections after existing footer comments. JSON merge requires objects
 on both sides; TOML content must
 be a table. Malformed existing JSON/TOML stops preparation before any files are
 written.
+
+## Merge precedence
+
+`precedence` decides which value wins when the file on disk and your declaration
+set the same key differently. It only affects `merge` mode.
+**Existing** means the current content on disk, including edits made by you or
+the application. **Declared** means the `json` or `toml` content you specify in
+Home Manager or the CLI manifest.
+
+| Precedence | When both sides set the same key | Use it to… |
+| --- | --- | --- |
+| `"existing"` (default) | Keep the value already on disk. | Supply defaults while allowing the application or user to change them. |
+| `"declared"` | Write the value from your declaration. | Enforce selected settings each time managed-files runs. |
+
+For example, suppose the file on disk contains:
+
+```toml
+theme = "light"
+font_size = 18
+```
+
+And you declare:
+
+```nix
+managedFiles.xdgConfigFiles."my-app/settings.toml" = {
+  precedence = "declared"; # or "existing", which is the default
+  toml = {
+    theme = "dark";
+    autosave = true;
+  };
+};
+```
+
+The resulting file contains:
+
+| Setting | With `"existing"` | With `"declared"` |
+| --- | --- | --- |
+| `theme` (both sides) | `"light"` | `"dark"` |
+| `font_size` (only on disk) | `18` | `18` |
+| `autosave` (only declared) | `true` | `true` |
+
+With `"existing"`, later changes to your declared `theme` also leave the on-disk
+value alone. With `"declared"`, each run restores your declared `theme` if it was
+changed on disk. This happens when managed-files runs, not continuously.
+
+Objects and tables merge recursively, so precedence applies to individual
+nested settings too. Arrays are kept or replaced as a whole, never combined.
+If one side has a table/object and the other has a different type, the winning
+side supplies the whole value at that key.
+
+Keys found only on disk survive within merged objects/tables, even with
+`"declared"`; use `replace` to make the entire file match your declaration.
+Removing a key from your declaration does not delete it from disk. If the file
+is missing, either precedence creates it from your declared content.
 
 ## Home Manager
 
@@ -85,10 +137,9 @@ must specify exactly one of `source`, `text`, `json`, or `toml`.
 - Each entry supports `enable = false`, including declarations inherited from
   other modules. Disabled entries are omitted from validation and application;
   disabling an entry does not delete its existing file.
-- Precedence defaults to `"existing"`. Set
+- [Merge precedence](#merge-precedence) defaults to `"existing"`. Set
   `managedFiles.defaults.precedence = "declared"` to change the default for both
-  collections; an entry's own `precedence` overrides it. With `"existing"`,
-  changing a declared value will not override that value once it is present.
+  collections; an entry's own `precedence` overrides it.
 
 For example, disable an inherited declaration with
 `managedFiles.xdgConfigFiles."my-app/settings.json".enable = false;`.
