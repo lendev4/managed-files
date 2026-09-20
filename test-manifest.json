@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "backup_extension": ".mfbak",
+  "files": [
+    {
+      "target": "/tmp/managed-files-test.json",
+      "mode": "merge",
+      "precedence": "existing",
+      "json": {
+        "theme": {
+          "mode": "dark"
+        },
+        "fontSize": 12
+      }
+    }
+  ]
+}
