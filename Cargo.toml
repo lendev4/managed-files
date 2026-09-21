@@ -2,7 +2,7 @@
 name = "managed-files"
 version = "0.2.0"
 edition = "2024"
-description = "Declarative management of mutable JSON, TOML, and text files"
+description = "Declarative management of mutable JSON, TOML, INI, and text files"
 license = "MIT"
 repository = "https://github.com/lendev4/managed-files"
 readme = "README.md"

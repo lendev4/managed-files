@@ -18,15 +18,18 @@ as needed.
 | Mode | On application |
 | --- | --- |
 | `seed` | Create a missing file; leave an existing file untouched. |
-| `merge` | Recursively merge structured JSON or TOML into existing content, or create the file. |
+| `merge` | Recursively merge structured JSON, TOML, or INI into existing content, or create the file. |
 | `replace` | Write the declared content every time, leaving the file writable by its owner. |
 | `replace-readonly` | Write the declared content every time, then remove write permissions. |
 
 JSON is pretty-printed; TOML merges standard and
 inline tables recursively, preserves comments on untouched content, and appends
-new table sections after existing footer comments. JSON merge requires objects
+new table sections after existing footer comments. INI merges global keys and
+`[sections]` by key and re-renders the file in canonical `key = value` form;
+comments and blank lines are not preserved. JSON merge requires objects
 on both sides; TOML content must
-be a table. Malformed existing JSON/TOML stops preparation before any files are
+be a table; INI content must be a table of global scalar values and section
+tables of scalar values. Malformed existing JSON/TOML/INI stops preparation before any files are
 written.
 
 ## Merge precedence
@@ -34,7 +37,7 @@ written.
 `precedence` decides which value wins when the file on disk and your declaration
 set the same key differently. It only affects `merge` mode.
 **Existing** means the current content on disk, including edits made by you or
-the application. **Declared** means the `json` or `toml` content you specify in
+the application. **Declared** means the `json`, `toml`, or `ini` content you specify in
 Home Manager or the CLI manifest.
 
 | Precedence | When both sides set the same key | Use it to… |
@@ -73,7 +76,7 @@ With `"existing"`, later changes to your declared `theme` also leave the on-disk
 value alone. With `"declared"`, each run restores your declared `theme` if it was
 changed on disk. This happens when managed-files runs, not continuously.
 
-Objects and tables merge recursively, so precedence applies to individual
+Objects, tables, and INI sections merge recursively, so precedence applies to individual
 nested settings too. Arrays are kept or replaced as a whole, never combined.
 If one side has a table/object and the other has a different type, the winning
 side supplies the whole value at that key.
@@ -122,6 +125,9 @@ Declare the files to manage:
         backupExtension = ".mfbak"; # opt in for this file only
         toml = { editor.autosave = true; };
       };
+      "my-app/settings.ini" = {
+        ini = { theme = "dark"; editor.autosave = true; };
+      };
       "my-app/template.txt" = {
         mode = "replace";
         source = ./template.txt;
@@ -138,10 +144,13 @@ Declare the files to manage:
 Use `managedFiles.files` for paths relative to your home directory and
 `managedFiles.xdgConfigFiles` for paths relative to `config.xdg.configHome`
 (usually `~/.config`). Both collections use the same options. Each enabled entry
-must specify exactly one of `source`, `text`, `json`, or `toml`.
+must specify exactly one of `source`, `text`, `json`, `toml`, or `ini`.
 
-- JSON and TOML entries default to `mode = "merge"`; other modes can still be
+- JSON, TOML, and INI entries default to `mode = "merge"`; other modes can still be
   selected explicitly. Text and source entries require an explicit mode.
+- INI entries use top-level scalar values as global keys and nested attribute
+  sets as `[sections]`. Section values must be strings, numbers, or booleans;
+  deeper nesting, arrays, and nulls are rejected.
 - The module enables automatically when at least one entry is enabled. Set
   `managedFiles.enable = false` to disable all management. No files means no
   package installation or activation by default.

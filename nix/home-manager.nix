@@ -35,11 +35,11 @@ let
             "replace-readonly"
           ];
           default =
-            if config.json != null || config.toml != null then
+            if config.json != null || config.toml != null || config.ini != null then
               "merge"
             else
               throw "managedFiles entry ${name}: mode must be specified for text or source content.";
-          defaultText = lib.literalExpression ''"merge" for json/toml; required for text/source'';
+          defaultText = lib.literalExpression ''"merge" for json/toml/ini; required for text/source'';
           description = "How managed-files should manage this file.";
         };
 
@@ -65,6 +65,12 @@ let
           type = types.nullOr types.attrs;
           default = null;
           description = "Structured TOML contents. Defaults to merge mode.";
+        };
+
+        ini = mkOption {
+          type = types.nullOr types.attrs;
+          default = null;
+          description = "Structured INI contents. Defaults to merge mode. Top-level scalar values become global keys; nested attribute sets become [sections].";
         };
 
         precedence = mkOption {
@@ -104,6 +110,7 @@ let
         file.text
         file.json
         file.toml
+        file.ini
       ]
     );
 
@@ -122,11 +129,11 @@ let
       }
       {
         assertion = contentCount file == 1;
-        message = "${option} must define exactly one of source, text, json, or toml.";
+        message = "${option} must define exactly one of source, text, json, toml, or ini.";
       }
       {
-        assertion = file.mode != "merge" || file.json != null || file.toml != null;
-        message = "${option}: merge mode only supports json or toml content.";
+        assertion = file.mode != "merge" || file.json != null || file.toml != null || file.ini != null;
+        message = "${option}: merge mode only supports json, toml, or ini content.";
       }
       {
         assertion = validBackupExtension file.backupExtension;
@@ -152,6 +159,8 @@ let
           { json = file.json; }
         else if file.toml != null then
           { toml = file.toml; }
+        else if file.ini != null then
+          { ini = file.ini; }
         else
           throw "${option}: no content configured";
     in

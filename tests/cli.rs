@@ -97,14 +97,22 @@ fn structured_merges_cover_precedence_and_creation() {
             "# keep me\n[editor]\nsize = 18\nlocal = true\n",
         )
         .unwrap();
+        fs::write(
+            dir.path().join("config.ini"),
+            "; keep me\n[editor]\nsize = 18\nlocal = true\n",
+        )
+        .unwrap();
         let declared = json!({"editor":{"size":12,"theme":"dark"},"items":[1]});
+        let ini_declared = json!({"editor":{"size":12,"theme":"dark"}});
         success(apply(
             &dir,
             json!([
                 {"target":"config.json","mode":"merge","precedence":precedence,"json":declared},
                 {"target":"config.toml","mode":"merge","precedence":precedence,"toml":declared},
+                {"target":"config.ini","mode":"merge","precedence":precedence,"ini":ini_declared},
                 {"target":"new.json","mode":"merge","json":declared},
-                {"target":"new.toml","mode":"merge","toml":declared}
+                {"target":"new.toml","mode":"merge","toml":declared},
+                {"target":"new.ini","mode":"merge","ini":ini_declared}
             ]),
             json!(".bak"),
         ));
@@ -133,9 +141,20 @@ fn structured_merges_cover_precedence_and_creation() {
         );
         assert!(text.contains("# keep me"));
         assert!(value["editor"]["local"].as_bool().unwrap());
+        let ini_text = fs::read_to_string(dir.path().join("config.ini")).unwrap();
+        // INI merge normalizes: comments are dropped, output is canonical.
+        assert!(!ini_text.contains("; keep me"), "{ini_text}");
+        let expected_ini = if precedence == "existing" {
+            "[editor]\nsize = 18\nlocal = true\ntheme = dark\n"
+        } else {
+            "[editor]\nsize = 12\nlocal = true\ntheme = dark\n"
+        };
+        assert_eq!(ini_text, expected_ini);
         assert!(dir.path().join("config.json.bak").exists());
         assert!(dir.path().join("config.toml.bak").exists());
+        assert!(dir.path().join("config.ini.bak").exists());
         assert!(!dir.path().join("new.json.bak").exists());
+        assert!(!dir.path().join("new.ini.bak").exists());
         assert_eq!(
             serde_json::from_str::<Value>(
                 &fs::read_to_string(dir.path().join("new.json")).unwrap()
@@ -151,6 +170,35 @@ fn structured_merges_cover_precedence_and_creation() {
                 .as_integer(),
             Some(12)
         );
+        let new_ini = fs::read_to_string(dir.path().join("new.ini")).unwrap();
+        assert!(new_ini.contains("[editor]"));
+        assert!(new_ini.contains("size = 12"));
+        assert!(new_ini.contains("theme = dark"));
+    }
+}
+
+#[test]
+fn ini_merges_normalize_and_handle_global_keys() {
+    for precedence in ["existing", "declared"] {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("settings.ini"),
+            "; header\ntheme = light # user choice\n\n[editor]\n# font comment\nsize = 18\nlocal = true\n",
+        )
+        .unwrap();
+        let declared = json!({"theme": "dark", "editor": {"size": 12, "added": true}});
+        success(apply(
+            &dir,
+            json!([{"target":"settings.ini","mode":"merge","precedence":precedence,"ini":declared}]),
+            json!(null),
+        ));
+        let text = fs::read_to_string(dir.path().join("settings.ini")).unwrap();
+        let expected = if precedence == "existing" {
+            "theme = light\n\n[editor]\nsize = 18\nlocal = true\nadded = true\n"
+        } else {
+            "theme = dark\n\n[editor]\nsize = 12\nlocal = true\nadded = true\n"
+        };
+        assert_eq!(text, expected);
     }
 }
 
@@ -159,6 +207,7 @@ fn malformed_existing_files_are_preserved() {
     for (name, content) in [
         ("bad.json", json!({"json":{}})),
         ("bad.toml", json!({"toml":{}})),
+        ("bad.ini", json!({"ini":{}})),
     ] {
         let dir = tempdir().unwrap();
         fs::write(dir.path().join(name), "[invalid").unwrap();
@@ -237,6 +286,14 @@ fn entire_manifest_is_validated_before_any_mutation() {
             "TOML",
         ),
         (
+            json!({"target":"bad","mode":"replace","ini":{"section":{"bad":null}}}),
+            "INI",
+        ),
+        (
+            json!({"target":"bad","mode":"replace","ini":{"section":{"nested":{"deep":1}}}}),
+            "INI",
+        ),
+        (
             json!({"target":"bad","mode":"replace","source":"missing"}),
             "source",
         ),
@@ -247,6 +304,10 @@ fn entire_manifest_is_validated_before_any_mutation() {
         (
             json!({"target":"bad","mode":"merge","toml":{}}),
             "existing TOML",
+        ),
+        (
+            json!({"target":"bad","mode":"merge","ini":{}}),
+            "existing INI",
         ),
         (
             json!({"target":"../escape","mode":"replace","text":"x"}),

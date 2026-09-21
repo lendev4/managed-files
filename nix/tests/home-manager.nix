@@ -51,6 +51,13 @@ let
         theme = "dark";
       };
     };
+    "settings.ini" = {
+      ini = {
+        size = 12;
+        theme = "dark";
+        editor.size = 12;
+      };
+    };
   };
   enabled = evaluate {
     inherit files;

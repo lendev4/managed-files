@@ -17,7 +17,7 @@ if phase == "prepare":
         {k: v for k, v in f.items() if k != "backup_extension"} for f in manifest["files"]
     ]
     files = {Path(f["target"]).name: f for f in manifest["files"]}
-    assert set(files) == {"seed", "replace", "readonly", "settings.json", "settings.toml"}
+    assert set(files) == {"seed", "replace", "readonly", "settings.json", "settings.toml", "settings.ini"}
     assert files["seed"]["text"] == "initial"
     assert files["replace"]["source"].startswith("/nix/store/")
     assert Path(files["replace"]["source"]).read_text() == "from source\n"
@@ -30,6 +30,9 @@ if phase == "prepare":
     assert files["settings.toml"]["toml"] == {"size": 12, "theme": "dark"}
     assert files["settings.toml"]["precedence"] == "declared"
     assert files["settings.toml"]["mode"] == "merge"
+    assert files["settings.ini"]["ini"] == {"size": 12, "theme": "dark", "editor": {"size": 12}}
+    assert files["settings.ini"]["precedence"] == "existing"
+    assert files["settings.ini"]["mode"] == "merge"
     default_xdg = json.loads(Path("default-xdg.json").read_text())
     assert default_xdg["backup_extension"] is None
     assert default_xdg["files"] == [{
@@ -61,6 +64,7 @@ if phase == "prepare":
     (home / "replace").write_text("old")
     (home / "settings.json").write_text('{"size":18,"local":true}')
     (home / "settings.toml").write_text('# preserved\nsize = 18\nlocal = true\n')
+    (home / "settings.ini").write_text('; preserved\n[editor]\nsize = 18\nlocal = true\n')
 elif phase == "dry-run":
     preview = Path("dry-run.log").read_text()
     assert "would create /build/home/seed" in preview
@@ -94,4 +98,9 @@ else:
     text = (home / "settings.toml").read_text()
     assert tomllib.loads(text) == {"size":12,"theme":"dark","local":True}
     assert "# preserved" in text
+    ini_text = (home / "settings.ini").read_text()
+    assert "; preserved" not in ini_text
+    assert "size = 18" in ini_text
+    assert "local = true" in ini_text
+    assert "theme = dark" in ini_text
     (home / "seed").write_text("edited")

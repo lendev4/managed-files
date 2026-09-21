@@ -5,6 +5,7 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
 use tempfile::NamedTempFile;
 
+use crate::formats::ini::{merge_ini, render_ini};
 use crate::formats::json::merge_values;
 use crate::formats::toml::{merge_document, render_toml};
 use crate::manifest::{Content, Manifest, Mode};
@@ -253,6 +254,9 @@ impl Plan {
                             Content::Toml { toml } => {
                                 merge_document(toml, text, file.precedence)?.into_bytes()
                             }
+                            Content::Ini { ini } => {
+                                merge_ini(ini, text, file.precedence)?.into_bytes()
+                            }
                             _ => unreachable!("manifest validation checks merge content"),
                         }
                     } else {
@@ -370,6 +374,7 @@ fn render_content(content: &Content) -> Result<Vec<u8>> {
         Content::Text { text } => Ok(text.as_bytes().to_vec()),
         Content::Json { json } => render_json(json),
         Content::Toml { toml } => Ok(render_toml(toml)?.into_bytes()),
+        Content::Ini { ini } => Ok(render_ini(ini)?.into_bytes()),
     }
 }
 

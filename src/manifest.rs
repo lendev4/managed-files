@@ -27,8 +27,11 @@ impl Manifest {
             )?;
             if matches!(file.mode, Mode::Merge) {
                 ensure!(
-                    matches!(file.content, Content::Json { .. } | Content::Toml { .. }),
-                    "{}: merge mode only supports JSON and TOML",
+                    matches!(
+                        file.content,
+                        Content::Json { .. } | Content::Toml { .. } | Content::Ini { .. }
+                    ),
+                    "{}: merge mode only supports JSON, TOML, and INI",
                     file.target.display()
                 );
                 if let Content::Json { json } = &file.content {
@@ -43,6 +46,13 @@ impl Manifest {
                 ensure!(
                     toml.is_object(),
                     "{}: TOML content must be a table",
+                    file.target.display()
+                );
+            }
+            if let Content::Ini { ini } = &file.content {
+                ensure!(
+                    ini.is_object(),
+                    "{}: INI content must be a table",
                     file.target.display()
                 );
             }
@@ -116,19 +126,21 @@ struct RawFile {
     json: Option<Value>,
     #[serde(default, deserialize_with = "present")]
     toml: Option<Value>,
+    #[serde(default, deserialize_with = "present")]
+    ini: Option<Value>,
 }
 
 impl TryFrom<RawFile> for ManagedFile {
     type Error = anyhow::Error;
 
     fn try_from(raw: RawFile) -> Result<Self> {
-        let count = [&raw.source, &raw.text, &raw.json, &raw.toml]
+        let count = [&raw.source, &raw.text, &raw.json, &raw.toml, &raw.ini]
             .iter()
             .filter(|value| value.is_some())
             .count();
         ensure!(
             count == 1,
-            "{}: define exactly one of source, text, json, or toml",
+            "{}: define exactly one of source, text, json, toml, or ini",
             raw.target.display()
         );
         let content = if let Some(source) = raw.source {
@@ -141,9 +153,11 @@ impl TryFrom<RawFile> for ManagedFile {
             }
         } else if let Some(json) = raw.json {
             Content::Json { json }
+        } else if let Some(toml) = raw.toml {
+            Content::Toml { toml }
         } else {
-            Content::Toml {
-                toml: raw.toml.expect("one content field was checked"),
+            Content::Ini {
+                ini: raw.ini.expect("one content field was checked"),
             }
         };
         Ok(Self {
@@ -179,4 +193,5 @@ pub enum Content {
     Text { text: String },
     Json { json: Value },
     Toml { toml: Value },
+    Ini { ini: Value },
 }
