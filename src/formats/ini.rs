@@ -65,9 +65,7 @@ impl IniData {
 }
 
 fn parse_declared(value: &Value) -> Result<IniData> {
-    let top = value
-        .as_object()
-        .context("INI content must be a table")?;
+    let top = value.as_object().context("INI content must be a table")?;
     let mut data = IniData::default();
     for (key, item) in top {
         match item {
@@ -80,11 +78,12 @@ fn parse_declared(value: &Value) -> Result<IniData> {
                 }
             }
             Value::Array(_) => bail!("INI section {key:?} must be a table of scalar values"),
-            Value::Null => bail!("INI key {key:?} must be a string, number, boolean, or section table"),
+            Value::Null => {
+                bail!("INI key {key:?} must be a string, number, boolean, or section table")
+            }
             scalar if scalar.is_string() || scalar.is_number() || scalar.is_boolean() => {
                 validate_key(key)?;
-                data.globals
-                    .push((key.clone(), scalar_to_string(scalar)?));
+                data.globals.push((key.clone(), scalar_to_string(scalar)?));
             }
             _ => bail!("INI key {key:?} must be a string, number, boolean, or section table"),
         }
@@ -263,7 +262,8 @@ mod tests {
     #[test]
     fn declared_values_win_and_normalize() -> Result<()> {
         let declared = json!({"server": {"host": "declared"}});
-        let existing = "[server] # section comment\nhost = existing ; keep this comment\nother = 1\n";
+        let existing =
+            "[server] # section comment\nhost = existing ; keep this comment\nother = 1\n";
         let merged = merge_ini(&declared, existing, Precedence::Declared)?;
         assert_eq!(merged, "[server]\nhost = declared\nother = 1\n");
         Ok(())
@@ -274,7 +274,10 @@ mod tests {
         let declared = json!({"new_section": {"key": "v"}, "server": {"fresh": "yes"}});
         let existing = "[server]\nhost = h\n";
         let merged = merge_ini(&declared, existing, Precedence::Existing)?;
-        assert_eq!(merged, "[server]\nhost = h\nfresh = yes\n\n[new_section]\nkey = v\n");
+        assert_eq!(
+            merged,
+            "[server]\nhost = h\nfresh = yes\n\n[new_section]\nkey = v\n"
+        );
         Ok(())
     }
 
